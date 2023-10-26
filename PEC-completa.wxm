@@ -1,0 +1,108 @@
+/* [wxMaxima batch file version 1] [ DO NOT EDIT BY HAND! ]*/
+/* [ Created with wxMaxima version 22.04.0 ] */
+/* [wxMaxima: input   start ] */
+/*Ejercicio 1*/
+/* [wxMaxima: input   end   ] */
+
+
+/* [wxMaxima: input   start ] */
+funcion1( fileDataPath, filetoSavePlot, filetoSaveInterpol ) := block(
+    /* Inputs: 
+        - fileDataPath       : path de fichero de datos de puntos coordenados. 
+        - filetoSavePlot     : path donde se guardará la grafica generada
+        - filetoSaveInterpol : path donde se guardará el archivo .lisp que contendrá las interpolaciones */
+    [ data, dataMatrix, linearInterpol, lagrangeInterpol, splineInterpol, xdom, ydom ],
+    load(interpol), /* Cargamos libreria para usar las diferentes interpolaciones (lineal, lagrangiana, splines) */
+    data : read_nested_list( fileDataPath ), /* Cargamos fichero de datos y asignamos a variable local */
+    dataMatrix : apply( matrix, data ), /* Pasamos los datos a una matriz para trabajar facilmente */
+    /* Calculamos las 3 interpolaciones */
+    linearInterpol : linearinterpol(data),
+    lagrangeInterpol : lagrange(data),
+    splineInterpol : cspline(data),
+    /* Calculamos dominio de x e y usando maximo y minimos del fichero leido */
+    /* Vemos que el codigo es practicamente el mismo; se podría diseñar una función para no "copiar" código. */
+    xdom : [ x, apply( min, transpose(dataMatrix)[1] ), apply( max, transpose(dataMatrix)[1] )  ],
+    ydom : [ y, apply( min, transpose(dataMatrix)[2] ), apply( max, transpose(dataMatrix)[2] )  ],    
+    /* Mostramos la grafica  con los datos y las 3 interpolaciones y la guardamos como pdf en "filetoSavePlot" */
+    wxplot2d( [ [ discrete, data ], linearInterpol, lagrangeInterpol, splineInterpol ], xdom, ydom, [ style, points, lines, lines, lines ],[legend, "data", "linear", "lagrage", "spline"]),
+    wxplot2d( [ [ discrete, data ], linearInterpol, lagrangeInterpol, splineInterpol ], xdom, ydom, [ style, points, lines, lines, lines ],[legend, "data", "linear", "lagrage", "spline"], [ pdf_file, filetoSavePlot ]),
+    /*Guardamos las 3 interpolaciones en un fichero para poderlas cargar en un futuro*/
+    save( filetoSaveInterpol, linearInterpol, splineInterpol, lagrangeInterpol )    
+)$
+/* [wxMaxima: input   end   ] */
+
+
+/* [wxMaxima: input   start ] */
+funcion2( fileDataPath, model, indepen, params ) := block(
+    /* Inputs:
+        - fileDataPath : path de fichero con datos
+        - model        : modelo que aproxima (presumiblemente) los datos
+        - indepen      : variable independiente en el model
+        - params       : parametros que debemos ajustar en el modelo */
+    [ data, dataMatrix, aux, f ],
+    load(lsquares), /* Cargamos librería para usar la función "lsquares_estimates" */
+    data : read_nested_list( fileDataPath ), /* obtenemos fichero de datos como una lista de puntos */
+    dataMatrix : apply( matrix, data ), /* Convertimos los datos a matriz para trabajar con ella */
+    aux : lsquares_estimates( dataMatrix, [ indepen, y ], y=model, params  ), /* Calculamos los valores de los parametros */
+    f : float( subst( aux[1], model ) ) /* Sustituimos los parametros ajustados en model y lo ofrecemos como salida. */
+)$
+/* [wxMaxima: input   end   ] */
+
+
+/* [wxMaxima: input   start ] */
+funcion3( fileDataPath, expr, indepen ) := block(
+    /* Inputs:
+        - fileDataPath : ruta fichero de datos
+        - expr         : expresion que ajusta los datos
+        - indepen      : variable independiente de la expresion que ajusta los datos */
+    [ data, dataMatrix, datalength, diffexpr, listDerivatebyData, listDerivatebyexpr, listforXdom, listforYdom, xdom, ydom ],
+    data : read_nested_list( fileDataPath ),/* Cargamos fichero de datos */
+    dataMatrix : apply( matrix, data ),/* Transformamos en matriz los datos para calcular dominios */  
+    datalength : length(data), /* Calculamos longitud de fichero de datos para obtener derivadas de los puntos */
+    diffexpr : diff( expr, indepen ), /* Obtenemos derivada de la expresion */
+    /* Creamos lista con valor de x y derivada a través de diferencias centradas a traves de los datos (sin extremos) */
+    listDerivatebyData : makelist( [ data[i][1], ((data[i + 1][2] - data[i-1][2]) / (data[i+1][1]-data[i-1][1])) ], i, 2, datalength-1 ), /* crea lista de x, valor derivada */
+    /* Creamos lista con x y derivada "analítica" (con extremos) */
+    listDerivatebyexpr : makelist( [ data[i][1], subst( data[i][1], indepen, diffexpr ) ], i, 1, datalength  ),
+    /* Obtenemos dominio de x: Creamos lista con los elementos de x de las derivadas y de los datos y sacamos el máximo y el mínimo */
+    listforXdom : append(transpose(dataMatrix)[1], transpose(apply(matrix, listDerivatebyData))[1], transpose(apply(matrix, listDerivatebyexpr))[1]),    
+    xdom : [ x, apply( min, listforXdom) , apply( max, listforXdom)  ],
+    /* Hacemos el mismo procedimiento para el dominio de y pero sin el valor de los datos, ya que no se graficarán */
+    listforYdom : append(transpose(apply(matrix, listDerivatebyData))[2], transpose(apply(matrix, listDerivatebyexpr))[2]),
+    ydom : [ y, apply( min, listforYdom ), apply( max, listforYdom )  ],
+    /* Graficamos por pantalla las 2 derivadas para compararlas */
+    wxplot2d( [[discrete, listDerivatebyData], [discrete, listDerivatebyexpr]], xdom, ydom, [style, lines, lines], [ legend, "data", "expr" ], [ylabel, "derivated"] )
+)$
+/* [wxMaxima: input   end   ] */
+
+
+/* [wxMaxima: input   start ] */
+funcion4( fileDataPath, expr, indepen ) := block(
+    /* Inputs: 
+        - fileDataPath : ruta archivo de datos
+        - expr         : expresion que ajusta los datos
+        - indepen      : variable independiente en expresion */
+    [ data, dataMatrix, datalength, diffexpr, listDerivatebyData, listDerivatebyexpr, listforXdom, xdom, listforYdom, ydom ],
+    data : read_nested_list( fileDataPath ), /* Cargamos fichero de datos */
+    dataMatrix: apply( matrix, data ), /* Transformamos fichero en matriz para obtener dominios */    
+    datalength : length(data),/* Calculamos longitud de fichero para obtener las derivadas */
+    diffexpr : diff( expr, indepen, 2 ), /* Obtenemos derivada orden 2 de la expresion */
+    /* Obtenermos lista con x y derivada segunda a través de diferencias centradas(sin extremos) */
+    listDerivatebyData : makelist( [ data[i][1],(data[i+1][2] -2*data[i][2] + data[i-1][2] )/( (data[i+1][1] - data[i][1])^2 ) ], i, 2, datalength-1 ), /* crea lista de x, valor derivada */
+    /* Obtenemos lista con x y derivada segunda de forma "analítica"(con extremos) */
+    listDerivatebyexpr : makelist( [ data[i][1], subst( data[i][1], indepen, diffexpr ) ], i, 1, datalength  ),
+    /* Obtenemos dominio de x: Creamos lista con los elementos de x de las derivadas y de los datos y sacamos el máximo y el mínimo */
+    listforXdom : append(transpose(dataMatrix)[1], transpose(apply(matrix, listDerivatebyData))[1], transpose(apply(matrix, listDerivatebyexpr))[1]),    
+    xdom : [ x, apply( min, listforXdom) , apply( max, listforXdom)  ],
+    /* Hacemos el mismo procedimiento para el dominio de "y" pero sin el valor de los datos, ya que no se graficarán */
+    listforYdom : append(transpose(apply(matrix, listDerivatebyData))[2], transpose(apply(matrix, listDerivatebyexpr))[2]),
+    ydom : [ y, apply( min, listforYdom ), apply( max, listforYdom )  ],
+    /* Graficamos las derivadas para compararlas */
+    wxplot2d( [[discrete, listDerivatebyData ], [discrete, listDerivatebyexpr]], xdom, ydom, [style, lines, lines], [legend, "data", "expr"], [ylabel, "derivared"] )
+)$
+/* [wxMaxima: input   end   ] */
+
+
+
+/* Old versions of Maxima abort on loading files that end in a comment. */
+"Created with wxMaxima 22.04.0"$
